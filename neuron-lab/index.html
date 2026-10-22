@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Neuron Lab · Neuro Lab</title>
-    <meta name="description" content="Simulate single neurons and synapses in the browser.">
+    <meta name="description" content="Simulate a leaky integrate-and-fire neuron in the browser: move the sliders and watch the membrane voltage, spikes and firing rate change.">
     <!--slot:head-->
     <script type="module" src="/src/pages/neuron-lab.ts"></script>
   </head>
@@ -13,16 +13,51 @@
     <main id="main" tabindex="-1" class="page">
       <h1>Neuron Lab</h1>
       <p class="lead">Simulate single neurons and watch their membrane voltage change while you move the sliders.</p>
-      <div class="notice">
-        <p><strong>In preparation.</strong> The first model, the leaky integrate-and-fire neuron, is coming next.</p>
-      </div>
-      <h2>Planned</h2>
-      <ul>
-        <li>Leaky integrate-and-fire neuron, and how its firing rate depends on the input current</li>
-        <li>Izhikevich model: very different firing patterns from just four parameters</li>
-        <li>Hodgkin–Huxley model with sodium and potassium channels, and what happens when you block them</li>
-        <li>Synapses: two connected neurons and a pair that takes turns firing</li>
-      </ul>
+
+      <section class="lab" id="lif" aria-labelledby="lif-title">
+        <div class="lab__header">
+          <h2 id="lif-title">Leaky integrate-and-fire neuron</h2>
+          <a class="theory-link" href="../theory/#leaky-integrate-and-fire-neuron">How does this work?</a>
+        </div>
+        <p class="lab__intro">The membrane charges up like a capacitor and leaks back toward rest. Whenever the voltage crosses the threshold, the neuron fires a spike: the voltage is reset and stays there for a short refractory period.</p>
+        <noscript><p class="notice">This lab needs JavaScript to run the simulation.</p></noscript>
+
+        <div class="lab__layout">
+          <div>
+            <figure class="plots">
+              <div class="plot" id="lif-voltage-plot" role="img" aria-label="Membrane voltage over time"></div>
+              <div class="plot" id="lif-current-plot" role="img" aria-label="Input current over time"></div>
+              <figcaption>Dots mark spikes. The model only records when a spike happens; the spike's shape is not simulated. The dashed line is the threshold.</figcaption>
+            </figure>
+            <p class="lab__status" id="lif-status" aria-live="polite"></p>
+            <dl class="readouts" id="lif-readouts"></dl>
+          </div>
+          <form class="controls" id="lif-controls" aria-label="Simulation settings"></form>
+        </div>
+
+        <aside class="assumptions" aria-labelledby="lif-assumptions-title">
+          <h3 id="lif-assumptions-title">Assumptions and limits</h3>
+          <ul>
+            <li>The whole neuron is treated as one point with one voltage: no dendrites, no axon.</li>
+            <li>The membrane leak is constant. Real ion channels open and close depending on the voltage.</li>
+            <li>Spikes are not simulated, only their times. After each spike the voltage is simply reset.</li>
+            <li>Threshold and refractory period are fixed numbers, and there is no noise. Real neurons adapt and fire more irregularly.</li>
+            <li>The input is a current injected by an electrode, not input from synapses.</li>
+            <li>The default values are typical textbook values, not measurements of one particular neuron.</li>
+            <li>Computed with RK4 and a time step of 0.1&nbsp;ms; spike times are interpolated between steps.</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section class="coming-next">
+        <h2>Coming next</h2>
+        <ul>
+          <li>How the firing rate depends on the input current, compared with the exact formula</li>
+          <li>Izhikevich model: very different firing patterns from just four parameters</li>
+          <li>Hodgkin–Huxley model with sodium and potassium channels, and what happens when you block them</li>
+          <li>Synapses: two connected neurons and a pair that takes turns firing</li>
+        </ul>
+      </section>
     </main>
     <!--slot:footer-->
   </body>

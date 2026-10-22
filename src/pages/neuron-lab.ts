@@ -1,2 +1,213 @@
-// Neuron Lab page. The simulations start in Step 3; for now only the shared setup is loaded.
+// Neuron Lab page: the leaky integrate-and-fire neuron (Step 3).
+// All model math lives in src/models (CLAUDE.md rule 4); this file only builds the controls,
+// runs the simulation and shows the results.
+//
+// The simulation runs on the main thread: 300 ms at dt = 0.1 ms are 3000 RK4 steps of one
+// neuron, well under a millisecond, so a Web Worker (rule 8) isn't needed here.
+
 import '../ui/common.ts';
+import { constantCurrent, stepCurrent } from '../models/inputs.ts';
+import {
+  DEFAULT_LIF_PARAMETERS,
+  rheobase,
+  simulateLif,
+  steadyStateVoltage,
+  type LifParameters,
+  type LifTrace,
+} from '../models/lif.ts';
+import { countSpikes, firingRate } from '../models/spikes.ts';
+import { formatQuantity } from '../ui/format.ts';
+import { createTimePlot } from '../ui/plot.ts';
+import { createSlider, type Slider, type SliderOptions } from '../ui/slider.ts';
+
+const DURATION = 300; // ms of simulated time shown
+const DT = 0.1; // ms, time step
+const STEP_ON = 50; // ms, the step current switches on ...
+const STEP_OFF = 150; // ms ... and off again
+
+type InputMode = 'step' | 'constant';
+type SettingKey = keyof LifParameters | 'current';
+type Settings = Record<SettingKey, number>;
+
+const DEFAULT_SETTINGS: Settings = { ...DEFAULT_LIF_PARAMETERS, current: 2 }; // current in nA
+const DEFAULT_MODE: InputMode = 'step';
+
+interface SliderDefinition extends Omit<SliderOptions, 'id' | 'value'> {
+  readonly key: SettingKey;
+}
+
+// The ranges keep V_reset (≤ −60 mV) below θ (≥ −58 mV), as the model requires (docs/NOTES.md).
+const INPUT_SLIDERS: readonly SliderDefinition[] = [
+  { key: 'current', labelHtml: 'Current <i>I</i>', unit: 'nA', min: -2, max: 5, step: 0.05, decimals: 2, hint: 'Strength of the injected current. Negative pulls the voltage down.' },
+];
+
+const MEMBRANE_SLIDERS: readonly SliderDefinition[] = [
+  { key: 'tau', labelHtml: 'Time constant <i>τ</i>', unit: 'ms', min: 1, max: 50, step: 0.5, decimals: 1, hint: 'How fast the voltage follows the input (τ = R·C).' },
+  { key: 'resistance', labelHtml: 'Resistance <i>R</i>', unit: 'MΩ', min: 1, max: 50, step: 0.5, decimals: 1, hint: 'How much a current shifts the voltage (R·I).' },
+  { key: 'restPotential', labelHtml: 'Resting potential <i>V</i><sub>rest</sub>', unit: 'mV', min: -80, max: -55, step: 0.5, decimals: 1, hint: 'Where the voltage goes without input.' },
+];
+
+const SPIKE_SLIDERS: readonly SliderDefinition[] = [
+  { key: 'threshold', labelHtml: 'Threshold <i>θ</i>', unit: 'mV', min: -58, max: -30, step: 0.5, decimals: 1, hint: 'Crossing this voltage fires a spike.' },
+  { key: 'resetPotential', labelHtml: 'Reset <i>V</i><sub>reset</sub>', unit: 'mV', min: -90, max: -60, step: 0.5, decimals: 1, hint: 'The voltage right after a spike.' },
+  { key: 'refractoryPeriod', labelHtml: 'Refractory period <i>t</i><sub>ref</sub>', unit: 'ms', min: 0, max: 20, step: 0.5, decimals: 1, hint: 'How long the voltage is held at the reset after a spike.' },
+];
+
+const settings: Settings = { ...DEFAULT_SETTINGS };
+let mode: InputMode = DEFAULT_MODE;
+const sliders: Slider[] = [];
+const sliderKeys: SettingKey[] = [];
+
+function parameters(): LifParameters {
+  const { current: _current, ...lif } = settings;
+  return lif;
+}
+
+// ---------- Controls ----------
+
+const form = document.querySelector<HTMLFormElement>('#lif-controls')!;
+form.addEventListener('submit', (event) => event.preventDefault());
+
+function addFieldset(legend: string, definitions: readonly SliderDefinition[], extra?: HTMLElement): void {
+  const fieldset = document.createElement('fieldset');
+  fieldset.innerHTML = `<legend>${legend}</legend>`;
+  if (extra) fieldset.append(extra);
+  for (const definition of definitions) {
+    const slider = createSlider({ ...definition, id: `lif-${definition.key}`, value: settings[definition.key] }, (value) => {
+      settings[definition.key] = value;
+      scheduleUpdate();
+    });
+    sliders.push(slider);
+    sliderKeys.push(definition.key);
+    fieldset.append(slider.element);
+  }
+  form.append(fieldset);
+}
+
+const modeChoice = document.createElement('div');
+modeChoice.className = 'radio-group';
+modeChoice.innerHTML = `
+  <label><input type="radio" name="lif-mode" value="step"> Step: on from ${STEP_ON} to ${STEP_OFF} ms</label>
+  <label><input type="radio" name="lif-mode" value="constant"> Constant: on all the time</label>`;
+const modeInputs = [...modeChoice.querySelectorAll<HTMLInputElement>('input')];
+for (const radio of modeInputs) {
+  radio.checked = radio.value === mode;
+  radio.addEventListener('change', () => {
+    mode = radio.value as InputMode;
+    scheduleUpdate();
+  });
+}
+
+addFieldset('Input current', INPUT_SLIDERS, modeChoice);
+addFieldset('Membrane', MEMBRANE_SLIDERS);
+addFieldset('Spiking', SPIKE_SLIDERS);
+
+const resetButton = document.createElement('button');
+resetButton.type = 'button';
+resetButton.className = 'button';
+resetButton.textContent = 'Reset to default values';
+resetButton.addEventListener('click', () => {
+  Object.assign(settings, DEFAULT_SETTINGS);
+  mode = DEFAULT_MODE;
+  sliders.forEach((slider, index) => slider.setValue(settings[sliderKeys[index]]));
+  for (const radio of modeInputs) radio.checked = radio.value === mode;
+  scheduleUpdate();
+});
+form.append(resetButton);
+
+// ---------- Plots ----------
+
+/** Voltage range (mV) that fits the trace for the current settings, so the plot doesn't jump. */
+function voltageRange(): [number, number] {
+  const p = parameters();
+  const lowest = Math.min(p.resetPotential, p.restPotential, steadyStateVoltage(p, Math.min(settings.current, 0)));
+  const highest = Math.max(p.threshold, p.restPotential);
+  return [Math.floor(lowest / 5) * 5 - 5, Math.ceil(highest / 5) * 5 + 5];
+}
+
+const voltagePlot = createTimePlot(document.querySelector<HTMLElement>('#lif-voltage-plot')!, {
+  xLabel: 'Time (ms)',
+  yLabel: 'Voltage (mV)',
+  series: [
+    { label: 'V (mV)', colorVariable: '--color-plot-voltage', decimals: 2 },
+    { label: 'Threshold θ', colorVariable: '--color-plot-threshold', width: 1.5, dash: [6, 4] },
+    { label: 'Spike', colorVariable: '--color-plot-spike', pointsOnly: true },
+  ],
+  xRange: () => [0, DURATION],
+  yRange: voltageRange,
+  height: (width) => Math.round(Math.min(320, Math.max(220, width * 0.42))),
+  syncKey: 'lif',
+});
+
+const currentPlot = createTimePlot(document.querySelector<HTMLElement>('#lif-current-plot')!, {
+  xLabel: 'Time (ms)',
+  yLabel: 'Current (nA)',
+  series: [{ label: 'I (nA)', colorVariable: '--color-plot-input', decimals: 2 }],
+  xRange: () => [0, DURATION],
+  yRange: () => [Math.min(0, settings.current) - 0.5, Math.max(0, settings.current) + 0.5],
+  height: () => 130,
+  syncKey: 'lif',
+});
+
+// ---------- Simulation and results ----------
+
+const status = document.querySelector<HTMLElement>('#lif-status')!;
+const readouts = document.querySelector<HTMLElement>('#lif-readouts')!;
+
+function update(): void {
+  const p = parameters();
+  const current = mode === 'step' ? stepCurrent(settings.current, STEP_ON, STEP_OFF) : constantCurrent(settings.current);
+  let trace: LifTrace;
+  try {
+    trace = simulateLif(p, current, { duration: DURATION, dt: DT });
+  } catch (error) {
+    status.textContent = `These settings can't be simulated: ${(error as Error).message}`;
+    status.classList.add('lab__status--error');
+    return;
+  }
+  status.classList.remove('lab__status--error');
+
+  // Spike markers: a dot at θ for the first of the two extra samples the trace adds at each spike.
+  const spikeMarkers = trace.time.map((t, k) =>
+    k + 1 < trace.time.length && trace.time[k + 1] === t && trace.voltage[k] === p.threshold ? p.threshold : null,
+  );
+  voltagePlot.setData(trace.time, [trace.voltage, trace.time.map(() => p.threshold), spikeMarkers]);
+  currentPlot.setData(trace.time, [trace.current]);
+
+  const [onFrom, onTo] = mode === 'step' ? [STEP_ON, STEP_OFF] : [0, DURATION];
+  const spikesWhileOn = countSpikes(trace.spikeTimes, onFrom, onTo);
+  const rate = firingRate(trace.spikeTimes, onFrom, onTo);
+  const iRheo = rheobase(p);
+  const vInfinity = steadyStateVoltage(p, settings.current);
+
+  readouts.innerHTML = `
+    <div><dt>Spikes in ${DURATION} ms</dt><dd>${trace.spikeTimes.length}</dd></div>
+    <div><dt>Firing rate while the input is on</dt><dd>${formatQuantity(rate, 1, 'Hz')}</dd></div>
+    <div><dt>Rheobase <i>I</i><sub>rheo</sub> = (θ − <i>V</i><sub>rest</sub>)/<i>R</i></dt><dd>${formatQuantity(iRheo, 2, 'nA')}</dd></div>
+    <div><dt>Target voltage <i>V</i><sub>∞</sub> = <i>V</i><sub>rest</sub> + <i>R·I</i></dt><dd>${formatQuantity(vInfinity, 1, 'mV')}</dd></div>`;
+
+  const iText = formatQuantity(settings.current, 2, 'nA');
+  const rheoText = formatQuantity(iRheo, 2, 'nA');
+  if (settings.current <= iRheo) {
+    status.textContent = `${iText} is not above the rheobase (${rheoText}): the voltage can only approach ${formatQuantity(vInfinity, 1, 'mV')}, which is not above the threshold (${formatQuantity(p.threshold, 1, 'mV')}), so the neuron never fires.`;
+  } else if (spikesWhileOn === 0) {
+    status.textContent = `${iText} is above the rheobase (${rheoText}), but the input is switched off before the voltage reaches the threshold.`;
+  } else {
+    status.textContent = `${iText} is above the rheobase (${rheoText}): the voltage heads for ${formatQuantity(vInfinity, 1, 'mV')}, above the threshold, so the neuron fires.`;
+  }
+}
+
+// A dragged slider sends many events; all events that arrive before the next turn of the event
+// loop share one simulation. (setTimeout rather than requestAnimationFrame: the latter pauses
+// whenever the page isn't being drawn, which would leave the results out of date.)
+let updateScheduled = false;
+function scheduleUpdate(): void {
+  if (updateScheduled) return;
+  updateScheduled = true;
+  setTimeout(() => {
+    updateScheduled = false;
+    update();
+  }, 0);
+}
+
+update();

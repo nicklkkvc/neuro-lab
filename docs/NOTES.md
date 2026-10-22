@@ -194,3 +194,110 @@ Both ratios move toward 2 and 16 as the step shrinks, just as predicted. Even at
 - **Fixed steps.** Professional solvers adjust $\Delta t$ automatically: small steps where the curve bends sharply, big ones where it is nearly straight. Neuro Lab uses fixed steps, because they are easier to understand and keep animations and spike times simple.
 
 Further reading: E. Hairer, S. P. Nørsett, G. Wanner, *Solving Ordinary Differential Equations I*, Springer (1993).
+
+## Leaky integrate-and-fire neuron
+
+### The idea
+
+A neuron collects input. Its membrane voltage rises, and when the voltage reaches a **threshold**, the neuron fires a **spike** and starts over. Between inputs, charge leaks away, so a weak input can never make it fire. That is the whole leaky integrate-and-fire (LIF) model: *integrate* the input, *leak* toward rest, *fire* at the threshold.
+
+The idea goes back to Louis Lapicque (1907), who described nerve excitation with a capacitor model long before anyone knew how a spike works. It is still one of the most used neuron models, because it is simple enough to calculate by hand and fast enough to simulate thousands of neurons.
+
+### The membrane as an electric circuit
+
+- The cell membrane is a very thin insulating layer between two salty, conducting liquids (inside and outside the cell). It stores electric charge like a **capacitor** with capacitance $C$.
+- Some ion channels in the membrane are always open and let charge leak through. Together they act like a **resistor** $R$.
+- Differences in ion concentrations between inside and outside act like a **battery** that pulls the voltage toward the **resting potential** $V_{\text{rest}}$, about $-65$ mV. Where this battery comes from is explained later in these notes, with the Hodgkin–Huxley model.
+- An **input current** $I$ flows in, for example from an electrode in an experiment.
+
+Charge is conserved: the input current either charges the capacitor or leaks out through the resistor (Kirchhoff's current law):
+
+$$I = C\,\frac{dV}{dt} + \frac{V - V_{\text{rest}}}{R}$$
+
+Multiplying by $R$ and writing $\tau = R \cdot C$ (the membrane time constant) gives the LIF equation:
+
+$$\tau\,\frac{dV}{dt} = -\left(V - V_{\text{rest}}\right) + R\,I$$
+
+The right side is the distance between the voltage and its target $V_{\text{rest}} + R\,I$. So the voltage moves toward that target, and the farther away it is, the faster it moves. It is the decay equation from the solver section again, only with a shifted target.
+
+### Charging with a constant current
+
+If the voltage doesn't change any more ($\frac{dV}{dt} = 0$), it has reached the **steady state**
+
+$$V_{\infty} = V_{\text{rest}} + R\,I$$
+
+Starting at rest, the voltage approaches this value exponentially, just like a charging capacitor:
+
+$$V(t) = V_{\text{rest}} + R\,I\left(1 - e^{-t/\tau}\right)$$
+
+After one time constant, it has covered 63 % of the way ($1 - e^{-1} \approx 0.63$).
+
+### Fire and reset
+
+The equation alone never produces a spike. The model adds a rule:
+
+1. When $V$ reaches the threshold $\theta$, the neuron fires: the time is recorded as a spike.
+2. $V$ is set to the reset value $V_{\text{reset}}$.
+3. For the refractory period $t_{\text{ref}}$, the voltage stays at $V_{\text{reset}}$ and ignores all input. Real neurons also can't fire again immediately after a spike.
+
+The spike itself, a fast rise and fall of the voltage lasting about a millisecond, is not simulated; only its time is. This is the trick that makes the model so simple. It works reasonably well because spikes of a neuron all look nearly the same, so for many questions their timing carries the information.
+
+### When does the neuron fire? The rheobase
+
+The voltage can never rise above its steady state $V_{\infty}$. If $V_{\infty}$ stays below the threshold, the neuron never fires, however long the input lasts. It fires only if
+
+$$V_{\text{rest}} + R\,I > \theta$$
+
+or, solved for the current,
+
+$$I > \frac{\theta - V_{\text{rest}}}{R} = I_{\text{rheo}}$$
+
+This smallest current is called the **rheobase**. With the default values, $I_{\text{rheo}} = \frac{-50\ \text{mV} - (-65\ \text{mV})}{10\ \text{M}\Omega} = 1.5$ nA. Exactly at the rheobase, the voltage gets closer and closer to $\theta$ but never reaches it.
+
+### The time of the first spike
+
+Starting at rest with a constant current above the rheobase, the first spike happens when $V(t_1) = \theta$:
+
+$$
+\begin{aligned}
+\theta &= V_{\text{rest}} + R\,I\left(1 - e^{-t_1/\tau}\right) \\
+e^{-t_1/\tau} &= 1 - \frac{\theta - V_{\text{rest}}}{R\,I} \\
+&= \frac{R\,I - (\theta - V_{\text{rest}})}{R\,I} \\
+t_1 &= \tau \ln \frac{R\,I}{R\,I - (\theta - V_{\text{rest}})}
+\end{aligned}
+$$
+
+With the default values and $I = 2$ nA: $R\,I = 20$ mV and $t_1 = 10\ \text{ms} \cdot \ln\frac{20}{5} \approx 13.9$ ms. The tests check that the simulation hits such exact values.
+
+### Parameters
+
+| Symbol | Meaning | Default | On the page |
+|---|---|---|---|
+| $\tau$ | membrane time constant: how fast the voltage follows the input ($\tau = R\,C$) | 10 ms | 1 to 50 ms |
+| $R$ | membrane resistance: how much a current shifts the voltage | 10 MΩ | 1 to 50 MΩ |
+| $V_{\text{rest}}$ | resting potential: where the voltage goes without input | −65 mV | −80 to −55 mV |
+| $\theta$ | threshold: the voltage at which a spike is fired | −50 mV | −58 to −30 mV |
+| $V_{\text{reset}}$ | reset potential: the voltage right after a spike | −65 mV | −90 to −60 mV |
+| $t_{\text{ref}}$ | refractory period: how long the voltage is held at reset after a spike | 2 ms | 0 to 20 ms |
+| $I$ | input current, constant or switched on from 50 to 150 ms | 2 nA | −2 to 5 nA |
+
+The defaults are typical textbook values (similar values are used, for example, in Dayan & Abbott, *Theoretical Neuroscience*, 2001, chapter 5). They don't describe one particular real neuron. The ranges keep $V_{\text{reset}}$ below $\theta$; otherwise the neuron would fire again immediately after every reset.
+
+### How Neuro Lab simulates it
+
+Between spikes the voltage follows a smooth equation, so it is solved with RK4 and a time step of $\Delta t = 0.1$ ms.
+
+After every step the program checks whether $V$ has crossed $\theta$. If it went from $V_{\text{before}}$ to $V_{\text{after}} > \theta$ during the step, the crossing time is found by linear interpolation:
+
+$$t_{\text{spike}} = t + \Delta t \cdot \frac{\theta - V_{\text{before}}}{V_{\text{after}} - V_{\text{before}}}$$
+
+Without this, every spike time would be rounded up to the next step, with an error of up to 0.1 ms. The refractory period is counted from this exact spike time; if it ends in the middle of a step, only the rest of that step is simulated. The input current is held constant during each step, and the step current switches exactly at step boundaries.
+
+### Limitations
+
+- **A single point.** The whole neuron has one voltage. Real neurons have long dendrites and an axon, and the voltage differs along them.
+- **A constant leak.** Real membranes have ion channels that open and close depending on the voltage. They create the spike's shape and effects like bursting, which this model can't show (the Izhikevich and Hodgkin–Huxley models later in these notes can).
+- **No spike shape, a fixed threshold.** Real thresholds vary with the recent history of the neuron.
+- **No adaptation.** Under a constant input, many real neurons fire more and more slowly. The LIF neuron fires perfectly regularly.
+- **Current input.** The input here is a current injected by an electrode. Real synapses change the membrane's conductance instead (covered later in these notes, with synapses).
+- **No noise.** Real neurons fire somewhat irregularly; this model always does exactly the same thing.

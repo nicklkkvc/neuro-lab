@@ -65,13 +65,23 @@ Agreed in the roadmap review on 2026-10-22. Every session follows them; the step
 
 # PART 2 — NEURON LAB
 
-## [ ] Step 3: Leaky integrate-and-fire (LIF) page
+## [x] Step 3: Leaky integrate-and-fire (LIF) page
 - src/models/lif.ts using the solvers. Parameters: τ, R, V_rest, threshold, reset, refractory period.
 - During the refractory period V is held at the reset value, and spike times are interpolated between time steps. Both are needed for the exact comparison with theory in Step 4.
 - Neuron Lab page: sliders for all parameters and input current, live voltage plot updating while sliding, spike count and firing rate.
 - Input options: constant current and step current (on from t=50 to t=150 ms).
 - Reusable parts for every lab page: an "Assumptions & limits" box and a "How does this work?" link to the matching Theory section (CLAUDE.md rule 9).
 - Done when: voltage rises, spikes and resets; below a certain current it never fires.
+
+**Notes (2026-10-22):**
+- Model (`src/models/lif.ts`): `createLifPopulation(n, parameters, method)` with `step(t, dt, inputCurrent, onSpike)`, plus `simulateLif(parameters, current(t), { duration, dt })` for one neuron. Its trace has two extra samples (θ, then V_reset) at every spike time for plotting. Also `rheobase`, `steadyStateVoltage`, `validateLifParameters`. Input shapes are in `src/models/inputs.ts`, spike counting and rates in `src/models/spikes.ts`.
+- Spike handling: one shared RK4 step moves every neuron that is free for the whole step. A neuron whose refractory period ends mid-step gets a partial step for the rest. Crossings are interpolated linearly (error ≤ dt²/(8τ) ≈ 1.3·10⁻⁴ ms), and several spikes per step work. A spike needs V > θ (strictly), so exactly at the rheobase rounding can't fake a spike.
+- For Step 4: the interval formula with a general V_reset is already confirmed by a test to within 10⁻³ ms; the f-I curve can use `simulateLif` with `constantCurrent`.
+- For Step 7: input currents are held constant during a step. Synaptic conductances change within a step, so synaptic currents must be computed inside the derivative instead; extend the population for that.
+- UI building blocks for all labs: `src/ui/plot.ts` (uPlot with colors from `--color-plot-*`, rebuilt on theme change, follows the container width, fixed ranges, shared cursor), `src/ui/slider.ts` (label, value, hint, `aria-valuetext` with unit), `src/ui/format.ts` (real minus sign). Lab CSS classes: `.lab`, `.lab__header`, `.theory-link`, `.lab__layout`, `.plots`, `.readouts`, `.controls`, `.assumptions`. Math symbols in labels use `<i>` (serif).
+- `src/ui/theory-links.test.ts` fails if any page links to a `theory/#id` that doesn't exist.
+- Slider updates are bundled with `setTimeout`, not `requestAnimationFrame`, which pauses whenever the page isn't drawn. The simulation runs on the main thread (rule 8 not needed): 3000 steps take well under 1 ms.
+- Checked: 73 tests, and 3 deliberate bugs in the spike handling were each caught. In the browser: 1.45 nA and exactly 1.50 nA give no spikes, 1.55 nA gives 2. Also checked: keyboard (arrow keys), 360 px phone width without sideways scrolling, plots rebuilt on theme switch, contrast ≥ 5:1 for lines and text in both themes.
 
 ## [ ] Step 4: f-I curve + analytical validation
 - f-I curve tab (firing rate vs input current).
