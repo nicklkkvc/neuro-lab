@@ -11,4 +11,5 @@
 9. Never claim a result is biologically accurate without stating its assumptions — both in NOTES.md and on the website itself.
 10. If unsure about a scientific fact, parameter value or data source, say so clearly instead of guessing.
 11. Explain non-obvious code in comments with clear variable names.
-12. Libraries: uPlot (live plots), KaTeX (formulas), d3-force (graphs), Vitest (tests). Ask before adding other dependencies.
+12. Libraries: uPlot (live plots), KaTeX (formulas), d3-force (graphs), Vitest (tests), markdown-it (Theory pages). Avoid other dependencies; add one only if it is clearly the best option, and note the reason in the step notes.
+13. Working style: don't ask the user for permission. Choose the best option yourself, act on it, and explain the decision afterwards. Check your own work after every step. Only hand over what the user has to do themselves (e.g. creating accounts, entering passwords) or what depends on facts only they know.
