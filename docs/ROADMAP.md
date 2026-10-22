@@ -83,11 +83,20 @@ Agreed in the roadmap review on 2026-10-22. Every session follows them; the step
 - Slider updates are bundled with `setTimeout`, not `requestAnimationFrame`, which pauses whenever the page isn't drawn. The simulation runs on the main thread (rule 8 not needed): 3000 steps take well under 1 ms.
 - Checked: 73 tests, and 3 deliberate bugs in the spike handling were each caught. In the browser: 1.45 nA and exactly 1.50 nA give no spikes, 1.55 nA gives 2. Also checked: keyboard (arrow keys), 360 px phone width without sideways scrolling, plots rebuilt on theme switch, contrast ≥ 5:1 for lines and text in both themes.
 
-## [ ] Step 4: f-I curve + analytical validation
+## [x] Step 4: f-I curve + analytical validation
 - f-I curve tab (firing rate vs input current).
 - NOTES.md: derive the exact LIF interspike interval for a general reset value, T = t_ref + τ·ln((R·I − (V_reset − V_rest)) / (R·I − (θ − V_rest))). With reset to V_rest this becomes T = t_ref + τ·ln(R·I / (R·I − (θ − V_rest))). Also derive the rheobase I = (θ − V_rest)/R. The derivation assumes V is held at V_reset during t_ref (as built in Step 3).
 - Plot simulated and analytical curves together; test they match within tolerance. Simulated spike times are interpolated (Step 3); without that, each interval would come out up to one dt too long. Choose the tolerance with dt in mind.
 - Done when: both curves overlap.
+
+**Notes (2026-10-22):**
+- Model (`src/models/fi-curve.ts`): `interspikeInterval` and `exactFiringRate` (formula with general V_reset; ∞ / 0 Hz at or below the rheobase), `simulateFiringRates` (one neuron per current in one population, rate = 1000 / mean interval after the first spike; 0 Hz without spikes, `null` with only one), `compareWithExact` (separates "too slow to measure" from real disagreements).
+- Measured with the defaults (41 currents, 0–7.5 nA, 1 s each, dt = 0.1 ms): largest difference 0.0020 %; with spike interpolation switched off (scratch copy) 1.9 %. The test tolerance comes from the theory: relative rate error ≤ Δt²/(4τT), plus a factor 2 of margin.
+- One simulated f-I curve takes about 10 ms, so it runs on the main thread, and only while its tab is shown. The dots are cached per parameter set: moving the current slider only moves the marker (≈ 2 ms).
+- New UI building block `src/ui/tabs.ts` (WAI-ARIA tabs: arrow keys, Home/End, roving tabindex). The plot component is now `createPlot` (was `createTimePlot`), with `xDecimals` and `pointSize`; plots created inside a hidden tab grow to full width when shown. `formatPercent` shows small deviations.
+- The f-I x-axis adapts to the parameters: from 0 (or below a negative rheobase) to rheobase + 4·max(|rheobase|, 1 nA).
+- Theory: new section `#firing-rate-and-the-f-i-curve` (interval derivation, shape of the curve, large-current limit 1/t_ref, Hodgkin's class 1/2, error bound). Its formulas fit on phones; short names for long terms help (as with a and b there).
+- Checked in the browser: dots on the line, readouts against hand calculations (72.1 Hz with t_ref = 0, 18.6 Hz with τ = 30 ms and V_reset = −75 mV, rheobase 7.5 nA with R = 2 MΩ), arrow keys on the tabs, f-I tab at 360 px without sideways scrolling. 87 tests.
 
 ## [ ] Step 5: Izhikevich model
 - v' = 0.04v² + 5v + 140 − u + I, u' = a(bv − u); when v ≥ 30 mV: v ← c, u ← u + d.

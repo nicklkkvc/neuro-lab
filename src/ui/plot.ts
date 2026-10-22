@@ -1,4 +1,4 @@
-// Time-series plots built on uPlot, reused by every lab.
+// Line and point plots built on uPlot (time series, f-I curves, ...), reused by every lab.
 // - Colors come from the CSS design tokens, and the plot is rebuilt when the theme changes.
 // - The width follows the container (phones included); the height can depend on the width.
 // - Fixed axis ranges keep the plot from jumping around while a slider moves.
@@ -18,12 +18,16 @@ export interface PlotSeries {
   readonly dash?: number[];
   /** Draw only dots at non-empty values (for spike markers), no line. */
   readonly pointsOnly?: boolean;
+  /** Dot diameter in px for pointsOnly series (default 7). */
+  readonly pointSize?: number;
   /** Decimals for the value shown in the legend. */
   readonly decimals?: number;
 }
 
-export interface TimePlotOptions {
+export interface PlotOptions {
   readonly xLabel: string;
+  /** Decimals for the x value shown in the legend (default 1). */
+  readonly xDecimals?: number;
   readonly yLabel: string;
   readonly series: readonly PlotSeries[];
   readonly xRange: () => [number, number];
@@ -34,8 +38,8 @@ export interface TimePlotOptions {
   readonly syncKey?: string;
 }
 
-export interface TimePlot {
-  /** Replaces the data: x values and one array per series (null = no value at that x). */
+export interface Plot {
+  /** Replaces the data: x values (sorted) and one array per series (null = no value at that x). */
   setData(x: ArrayLike<number>, ys: ReadonlyArray<ArrayLike<number | null>>): void;
 }
 
@@ -43,7 +47,7 @@ function cssVariable(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function buildOptions(options: TimePlotOptions, width: number): uPlot.Options {
+function buildOptions(options: PlotOptions, width: number): uPlot.Options {
   const font = `12px ${getComputedStyle(document.body).fontFamily}`;
   const gridColor = cssVariable('--color-plot-grid');
   const axis = (label: string): uPlot.Axis => ({
@@ -59,7 +63,8 @@ function buildOptions(options: TimePlotOptions, width: number): uPlot.Options {
     const color = cssVariable(line.colorVariable);
     const value = (_plot: uPlot, raw: number | null) => formatNumber(raw, line.decimals ?? 1);
     if (line.pointsOnly) {
-      return { label: line.label, stroke: color, paths: () => null, points: { show: true, space: 0, size: 7, fill: color, stroke: color }, value };
+      const size = line.pointSize ?? 7;
+      return { label: line.label, stroke: color, paths: () => null, points: { show: true, space: 0, size, fill: color, stroke: color }, value };
     }
     return { label: line.label, stroke: color, width: line.width ?? 2, dash: line.dash, points: { show: false }, value };
   });
@@ -72,14 +77,14 @@ function buildOptions(options: TimePlotOptions, width: number): uPlot.Options {
       y: { range: () => options.yRange() },
     },
     axes: [axis(options.xLabel), { ...axis(options.yLabel), size: 56 }],
-    series: [{ label: options.xLabel, value: (_plot, raw) => formatNumber(raw, 1) }, ...series],
+    series: [{ label: options.xLabel, value: (_plot, raw) => formatNumber(raw, options.xDecimals ?? 1) }, ...series],
     // Dragging would zoom in; with sliders next to the plot that is more confusing than useful.
     cursor: { sync: options.syncKey === undefined ? undefined : { key: options.syncKey }, drag: { x: false, y: false, setScale: false } },
     legend: { live: true },
   };
 }
 
-export function createTimePlot(container: HTMLElement, options: TimePlotOptions): TimePlot {
+export function createPlot(container: HTMLElement, options: PlotOptions): Plot {
   let data: uPlot.AlignedData = [[], ...options.series.map(() => [])];
   const width = () => Math.max(240, container.clientWidth);
   let plot = new uPlot(buildOptions(options, width()), data, container);

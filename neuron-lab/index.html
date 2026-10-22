@@ -24,13 +24,30 @@
 
         <div class="lab__layout">
           <div>
-            <figure class="plots">
-              <div class="plot" id="lif-voltage-plot" role="img" aria-label="Membrane voltage over time"></div>
-              <div class="plot" id="lif-current-plot" role="img" aria-label="Input current over time"></div>
-              <figcaption>Dots mark spikes. The model only records when a spike happens; the spike's shape is not simulated. The dashed line is the threshold.</figcaption>
-            </figure>
-            <p class="lab__status" id="lif-status" aria-live="polite"></p>
-            <dl class="readouts" id="lif-readouts"></dl>
+            <div class="tabs__list" role="tablist" aria-label="Views of the neuron">
+              <button type="button" role="tab" id="lif-tab-trace" aria-controls="lif-panel-trace" aria-selected="true">Voltage over time</button>
+              <button type="button" role="tab" id="lif-tab-fi" aria-controls="lif-panel-fi" aria-selected="false" tabindex="-1">f-I curve</button>
+            </div>
+
+            <div role="tabpanel" id="lif-panel-trace" aria-labelledby="lif-tab-trace" tabindex="0">
+              <figure class="plots">
+                <div class="plot" id="lif-voltage-plot" role="img" aria-label="Membrane voltage over time"></div>
+                <div class="plot" id="lif-current-plot" role="img" aria-label="Input current over time"></div>
+                <figcaption>Dots mark spikes. The model only records when a spike happens; the spike's shape is not simulated. The dashed line is the threshold.</figcaption>
+              </figure>
+              <p class="lab__status" id="lif-status" aria-live="polite"></p>
+              <dl class="readouts" id="lif-readouts"></dl>
+            </div>
+
+            <div role="tabpanel" id="lif-panel-fi" aria-labelledby="lif-tab-fi" tabindex="0" hidden>
+              <p class="panel-intro">How fast does the neuron fire for a constant current of a given strength? The line is the exact formula, the dots are simulated neurons. <a class="theory-link" href="../theory/#firing-rate-and-the-f-i-curve">How is the formula derived?</a></p>
+              <figure class="plots">
+                <div class="plot" id="lif-fi-plot" role="img" aria-label="Firing rate against input current: exact formula and simulation"></div>
+                <figcaption>Each dot is its own neuron, simulated for 1&nbsp;s with a constant current; its rate is measured from the intervals between its spikes. The large dot marks the current set with the slider. The membrane and spiking sliders change the curve.</figcaption>
+              </figure>
+              <p class="lab__status" id="lif-fi-status" aria-live="polite"></p>
+              <dl class="readouts" id="lif-fi-readouts"></dl>
+            </div>
           </div>
           <form class="controls" id="lif-controls" aria-label="Simulation settings"></form>
         </div>
@@ -43,6 +60,7 @@
             <li>Spikes are not simulated, only their times. After each spike the voltage is simply reset.</li>
             <li>Threshold and refractory period are fixed numbers, and there is no noise. Real neurons adapt and fire more irregularly.</li>
             <li>The input is a current injected by an electrode, not input from synapses.</li>
+            <li>The f-I curve uses constant currents and the steady rate between spikes. Many real neurons slow down during a long input (adaptation), so their rate depends on when the spikes are counted.</li>
             <li>The default values are typical textbook values, not measurements of one particular neuron.</li>
             <li>Computed with RK4 and a time step of 0.1&nbsp;ms; spike times are interpolated between steps.</li>
           </ul>
@@ -52,7 +70,6 @@
       <section class="coming-next">
         <h2>Coming next</h2>
         <ul>
-          <li>How the firing rate depends on the input current, compared with the exact formula</li>
           <li>Izhikevich model: very different firing patterns from just four parameters</li>
           <li>Hodgkin–Huxley model with sodium and potassium channels, and what happens when you block them</li>
           <li>Synapses: two connected neurons and a pair that takes turns firing</li>

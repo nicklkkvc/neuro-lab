@@ -301,3 +301,78 @@ Without this, every spike time would be rounded up to the next step, with an err
 - **No adaptation.** Under a constant input, many real neurons fire more and more slowly. The LIF neuron fires perfectly regularly.
 - **Current input.** The input here is a current injected by an electrode. Real synapses change the membrane's conductance instead (covered later in these notes, with synapses).
 - **No noise.** Real neurons fire somewhat irregularly; this model always does exactly the same thing.
+
+## Firing rate and the f-I curve
+
+### What the f-I curve shows
+
+A classic experiment: inject a constant current $I$ into a neuron, count its spikes, repeat with a stronger current. Plotting the **firing rate** $f$ (spikes per second, in Hz) against the current gives the **f-I curve** ("frequency–current curve"). It is one of the most basic fingerprints of a neuron type. For the LIF neuron it can be calculated exactly, which makes it a perfect test for the simulation.
+
+### The time between two spikes
+
+Look at one cycle with a constant current above the rheobase. Right after a spike, the voltage sits at $V_{\text{reset}}$ for the refractory period $t_{\text{ref}}$. Then it charges up toward its target $V_{\infty} = V_{\text{rest}} + R\,I$. Measuring time $t$ from the end of the refractory period, this is the charging curve from before, only starting at $V_{\text{reset}}$:
+
+$$V(t) = V_{\infty} + \left(V_{\text{reset}} - V_{\infty}\right) e^{-t/\tau}$$
+
+The next spike comes when $V$ reaches $\theta$. Solving for the climbing time $t_{\text{climb}}$:
+
+$$
+\begin{aligned}
+\theta &= V_{\infty} + \left(V_{\text{reset}} - V_{\infty}\right) e^{-t_{\text{climb}}/\tau} \\
+e^{-t_{\text{climb}}/\tau} &= \frac{V_{\infty} - \theta}{V_{\infty} - V_{\text{reset}}} \\
+t_{\text{climb}} &= \tau \ln \frac{V_{\infty} - V_{\text{reset}}}{V_{\infty} - \theta}
+\end{aligned}
+$$
+
+With $V_{\infty} - V_{\text{reset}} = R\,I - (V_{\text{reset}} - V_{\text{rest}})$ and $V_{\infty} - \theta = R\,I - (\theta - V_{\text{rest}})$, the whole **interspike interval** (time from one spike to the next) is
+
+$$T = t_{\text{ref}} + \tau \ln \frac{R\,I - (V_{\text{reset}} - V_{\text{rest}})}{R\,I - (\theta - V_{\text{rest}})}$$
+
+If the reset is the resting potential ($V_{\text{reset}} = V_{\text{rest}}$), the first term in the numerator disappears:
+
+$$T = t_{\text{ref}} + \tau \ln \frac{R\,I}{R\,I - (\theta - V_{\text{rest}})}$$
+
+Every interval is the same, because every cycle starts from the same state: $V_{\text{reset}}$ at the end of the refractory period. So the neuron fires perfectly regularly, with the rate
+
+$$f = \frac{1}{T}$$
+
+With $T$ in ms, $f = 1000 / T$ in Hz. With the default values and $I = 2$ nA: $T = 2 + 10 \ln 4 \approx 15.86$ ms, so $f \approx 63.0$ Hz. The first spike is different, because it starts from $V_{\text{rest}}$ instead of $V_{\text{reset}}$ and has no refractory period before it. That is why the rate is measured from the intervals *between* spikes. Below or at the rheobase, the neuron never fires and $f = 0$.
+
+### The shape of the curve
+
+**Just above the rheobase**, the denominator $R\,I - (\theta - V_{\text{rest}})$ is tiny, the logarithm is huge, and the interval is very long. As $I$ approaches the rheobase, $T \to \infty$ and $f \to 0$: the LIF neuron can fire arbitrarily slowly, and its f-I curve starts continuously at zero. It rises very steeply there, because the logarithm grows only slowly as its argument gets large.
+
+**For large currents**, the fraction in the logarithm is close to 1. To see how close, write $a = V_{\text{reset}} - V_{\text{rest}}$ and $b = \theta - V_{\text{rest}}$ for short:
+
+$$
+\begin{aligned}
+\frac{R\,I - a}{R\,I - b} &= 1 + \frac{b - a}{R\,I - b} \\
+&\approx 1 + \frac{\theta - V_{\text{reset}}}{R\,I}
+\end{aligned}
+$$
+
+because $b - a = \theta - V_{\text{reset}}$, and for a large current $R\,I - b \approx R\,I$. For small $x$, $\ln(1 + x) \approx x$. So
+
+$$T \approx t_{\text{ref}} + \frac{\tau\,(\theta - V_{\text{reset}})}{R\,I}$$
+
+The climbing time shrinks like $1/I$, and the rate approaches its maximum $f_{\max} = 1 / t_{\text{ref}}$: 500 Hz for $t_{\text{ref}} = 2$ ms. The refractory period is one reason why real neurons can't fire faster than a few hundred spikes per second. Without a refractory period, $f \approx \frac{R\,I}{\tau\,(\theta - V_{\text{reset}})}$ would grow without limit, proportionally to the current.
+
+The British physiologist Alan Hodgkin (1948) sorted the nerve fibers of crabs by the shape of their f-I curves. "Class 1" neurons, like the LIF model, can fire at any low rate. "Class 2" neurons start firing at a clearly nonzero rate as soon as they fire at all; the Hodgkin–Huxley model later in these notes is an example.
+
+### How the page measures the simulated curve
+
+- Every dot is its own simulated neuron with a constant current. All of them are simulated together as one population, for 1 second, with $\Delta t = 0.1$ ms.
+- The rate is the number of intervals divided by the time between the first and the last spike, in other words $1/$(mean interval). The first spike is left out because it starts from rest.
+- A rate needs at least two spikes. Currents just above the rheobase may fire too slowly for that within 1 second; they get no dot. A neuron without any spike counts as 0 Hz.
+
+How close should the dots be to the line? The spike times are interpolated with a straight line between two time steps (see the LIF section). The true voltage curve bends slightly, with $\frac{d^2V}{dt^2} = -\frac{1}{\tau}\frac{dV}{dt}$. A straight line between two points of such a curve misses the true crossing time by at most
+
+$$\frac{\Delta t^2}{8\,\tau}$$
+
+which is $1.25 \cdot 10^{-4}$ ms for the default values. The mean interval comes from the first and last spike only, so its error is at most twice that, and the relative error of the rate is at most $\frac{\Delta t^2}{4\,\tau\,T}$. For an interval of 4 ms that is below 0.01 %. Without interpolation, every spike would be up to 0.1 ms late, and fast rates would be off by a few percent.
+
+### Limitations
+
+- **No adaptation.** Many real neurons start firing fast and then slow down during a constant current, so their "f-I curve" depends on when the spikes are counted. The LIF neuron fires at one constant rate.
+- **No noise.** In real neurons, noise lets the cell fire now and then even slightly below the rheobase, which smooths the sharp corner of the curve.
+- **Only class 1.** Neurons that start firing at a nonzero minimum rate (class 2) can't be described by this model.

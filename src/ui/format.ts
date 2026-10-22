@@ -8,6 +8,18 @@ export function formatNumber(value: number | null | undefined, decimals: number)
   return /^-0\.?0*$/.test(text) ? text.slice(1) : text.replace('-', '−');
 }
 
+/**
+ * A fraction as a percentage with 2 significant digits, for small deviations:
+ * 0.0000198 → "0.0020 %". Below 0.0001 % it just says so instead of showing an exponent.
+ */
+export function formatPercent(fraction: number): string {
+  if (!Number.isFinite(fraction)) return '∞ %';
+  const percent = fraction * 100;
+  if (percent === 0) return '0 %';
+  if (percent < 1e-4) return '< 0.0001 %';
+  return `${percent.toPrecision(2)} %`;
+}
+
 /** Number with a unit, separated by a non-breaking space so they stay on one line: "2.00 nA". */
 export function formatQuantity(value: number | null | undefined, decimals: number, unit: string): string {
   return `${formatNumber(value, decimals)} ${unit}`;

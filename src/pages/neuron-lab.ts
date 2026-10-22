@@ -1,11 +1,13 @@
-// Neuron Lab page: the leaky integrate-and-fire neuron (Step 3).
+// Neuron Lab page: the leaky integrate-and-fire neuron (Steps 3 and 4).
 // All model math lives in src/models (CLAUDE.md rule 4); this file only builds the controls,
-// runs the simulation and shows the results.
+// runs the simulations and shows the results.
 //
-// The simulation runs on the main thread: 300 ms at dt = 0.1 ms are 3000 RK4 steps of one
-// neuron, well under a millisecond, so a Web Worker (rule 8) isn't needed here.
+// Everything runs on the main thread, because nothing here is heavy (rule 8): the voltage trace
+// is 3000 RK4 steps of one neuron (well under 1 ms), the simulated f-I curve is 41 neurons for
+// 1 s (about 10 ms), and the f-I curve is only computed while its tab is shown.
 
 import '../ui/common.ts';
+import { compareWithExact, exactFiringRate, simulateFiringRates, type SimulatedRates } from '../models/fi-curve.ts';
 import { constantCurrent, stepCurrent } from '../models/inputs.ts';
 import {
   DEFAULT_LIF_PARAMETERS,
@@ -16,14 +18,18 @@ import {
   type LifTrace,
 } from '../models/lif.ts';
 import { countSpikes, firingRate } from '../models/spikes.ts';
-import { formatQuantity } from '../ui/format.ts';
-import { createTimePlot } from '../ui/plot.ts';
+import { formatPercent, formatQuantity } from '../ui/format.ts';
+import { createPlot } from '../ui/plot.ts';
 import { createSlider, type Slider, type SliderOptions } from '../ui/slider.ts';
+import { initTabs } from '../ui/tabs.ts';
 
-const DURATION = 300; // ms of simulated time shown
-const DT = 0.1; // ms, time step
+const DURATION = 300; // ms of simulated time in the voltage trace
+const DT = 0.1; // ms, time step for all simulations
 const STEP_ON = 50; // ms, the step current switches on ...
 const STEP_OFF = 150; // ms ... and off again
+const FI_DURATION = 1000; // ms simulated per current for the f-I curve
+const FI_SIMULATED_POINTS = 41; // simulated neurons (dots)
+const FI_FORMULA_POINTS = 401; // points of the exact line; every 10th one is also simulated
 
 type InputMode = 'step' | 'constant';
 type SettingKey = keyof LifParameters | 'current';
@@ -55,6 +61,7 @@ const SPIKE_SLIDERS: readonly SliderDefinition[] = [
 
 const settings: Settings = { ...DEFAULT_SETTINGS };
 let mode: InputMode = DEFAULT_MODE;
+let fiTabShown = false;
 const sliders: Slider[] = [];
 const sliderKeys: SettingKey[] = [];
 
@@ -115,7 +122,12 @@ resetButton.addEventListener('click', () => {
 });
 form.append(resetButton);
 
-// ---------- Plots ----------
+initTabs(document.querySelector<HTMLElement>('#lif [role="tablist"]')!, (panelId) => {
+  fiTabShown = panelId === 'lif-panel-fi';
+  scheduleUpdate();
+});
+
+// ---------- Voltage over time ----------
 
 /** Voltage range (mV) that fits the trace for the current settings, so the plot doesn't jump. */
 function voltageRange(): [number, number] {
@@ -125,7 +137,7 @@ function voltageRange(): [number, number] {
   return [Math.floor(lowest / 5) * 5 - 5, Math.ceil(highest / 5) * 5 + 5];
 }
 
-const voltagePlot = createTimePlot(document.querySelector<HTMLElement>('#lif-voltage-plot')!, {
+const voltagePlot = createPlot(document.querySelector<HTMLElement>('#lif-voltage-plot')!, {
   xLabel: 'Time (ms)',
   yLabel: 'Voltage (mV)',
   series: [
@@ -139,7 +151,7 @@ const voltagePlot = createTimePlot(document.querySelector<HTMLElement>('#lif-vol
   syncKey: 'lif',
 });
 
-const currentPlot = createTimePlot(document.querySelector<HTMLElement>('#lif-current-plot')!, {
+const currentPlot = createPlot(document.querySelector<HTMLElement>('#lif-current-plot')!, {
   xLabel: 'Time (ms)',
   yLabel: 'Current (nA)',
   series: [{ label: 'I (nA)', colorVariable: '--color-plot-input', decimals: 2 }],
@@ -149,23 +161,12 @@ const currentPlot = createTimePlot(document.querySelector<HTMLElement>('#lif-cur
   syncKey: 'lif',
 });
 
-// ---------- Simulation and results ----------
-
 const status = document.querySelector<HTMLElement>('#lif-status')!;
 const readouts = document.querySelector<HTMLElement>('#lif-readouts')!;
 
-function update(): void {
-  const p = parameters();
+function updateTrace(p: LifParameters): void {
   const current = mode === 'step' ? stepCurrent(settings.current, STEP_ON, STEP_OFF) : constantCurrent(settings.current);
-  let trace: LifTrace;
-  try {
-    trace = simulateLif(p, current, { duration: DURATION, dt: DT });
-  } catch (error) {
-    status.textContent = `These settings can't be simulated: ${(error as Error).message}`;
-    status.classList.add('lab__status--error');
-    return;
-  }
-  status.classList.remove('lab__status--error');
+  const trace: LifTrace = simulateLif(p, current, { duration: DURATION, dt: DT });
 
   // Spike markers: a dot at θ for the first of the two extra samples the trace adds at each spike.
   const spikeMarkers = trace.time.map((t, k) =>
@@ -195,6 +196,113 @@ function update(): void {
   } else {
     status.textContent = `${iText} is above the rheobase (${rheoText}): the voltage heads for ${formatQuantity(vInfinity, 1, 'mV')}, above the threshold, so the neuron fires.`;
   }
+}
+
+// ---------- f-I curve ----------
+
+/**
+ * Current range (nA) of the f-I plot: from 0 (or a bit below the rheobase, if that is negative)
+ * to 4 "rheobase units" above it, so the curve's start and its flattening are both visible.
+ */
+function fiCurrentRange(p: LifParameters): [number, number] {
+  const iRheo = rheobase(p);
+  const scale = Math.max(Math.abs(iRheo), 1); // nA
+  return [Math.min(0, iRheo - 0.5 * scale), iRheo + 4 * scale];
+}
+
+// The simulated dots only depend on the model parameters, not on the current slider, so they are
+// kept until a parameter changes.
+let fiSimulation: { key: string; grid: number[]; simulated: SimulatedRates } | undefined;
+let fiRateMax = 100; // Hz, top of the y axis
+
+const fiPlot = createPlot(document.querySelector<HTMLElement>('#lif-fi-plot')!, {
+  xLabel: 'Current (nA)',
+  xDecimals: 2,
+  yLabel: 'Firing rate (Hz)',
+  series: [
+    { label: 'Formula (Hz)', colorVariable: '--color-plot-voltage', decimals: 2 },
+    { label: 'Simulated (Hz)', colorVariable: '--color-plot-input', pointsOnly: true, decimals: 2 },
+    { label: 'Your current', colorVariable: '--color-plot-spike', pointsOnly: true, pointSize: 12, decimals: 2 },
+  ],
+  xRange: () => fiCurrentRange(parameters()),
+  yRange: () => [0, fiRateMax],
+  height: (width) => Math.round(Math.min(380, Math.max(240, width * 0.5))),
+});
+
+const fiStatus = document.querySelector<HTMLElement>('#lif-fi-status')!;
+const fiReadouts = document.querySelector<HTMLElement>('#lif-fi-readouts')!;
+
+function updateFiCurve(p: LifParameters): void {
+  const key = JSON.stringify(p);
+  if (fiSimulation?.key !== key) {
+    const [low, high] = fiCurrentRange(p);
+    const grid = Array.from({ length: FI_FORMULA_POINTS }, (_, i) => low + ((high - low) * i) / (FI_FORMULA_POINTS - 1));
+    const step = (FI_FORMULA_POINTS - 1) / (FI_SIMULATED_POINTS - 1); // every 10th grid point is simulated
+    const simulatedCurrents = Array.from({ length: FI_SIMULATED_POINTS }, (_, i) => grid[i * step]);
+    fiSimulation = { key, grid, simulated: simulateFiringRates(p, simulatedCurrents, { duration: FI_DURATION, dt: DT }) };
+  }
+  const { grid, simulated } = fiSimulation;
+  const step = (FI_FORMULA_POINTS - 1) / (FI_SIMULATED_POINTS - 1);
+
+  // Columns for the plot: the exact line everywhere, simulated dots on every 10th point, and one
+  // extra x value for the current set with the slider (the large dot).
+  const x: number[] = [];
+  const formula: number[] = [];
+  const dots: (number | null)[] = [];
+  const marker: (number | null)[] = [];
+  const yourCurrent = settings.current;
+  let markerAdded = yourCurrent < grid[0] || yourCurrent > grid[grid.length - 1];
+  grid.forEach((current, i) => {
+    if (!markerAdded && yourCurrent <= current) {
+      x.push(yourCurrent);
+      formula.push(exactFiringRate(p, yourCurrent));
+      dots.push(null);
+      marker.push(exactFiringRate(p, yourCurrent));
+      markerAdded = true;
+    }
+    x.push(current);
+    formula.push(exactFiringRate(p, current));
+    dots.push(i % step === 0 ? simulated.rates[i / step] : null);
+    marker.push(null);
+  });
+  fiRateMax = Math.max(10, Math.ceil((Math.max(...formula) * 1.1) / 10) * 10);
+  fiPlot.setData(x, [formula, dots, marker]);
+
+  const comparison = compareWithExact(p, grid.filter((_, i) => i % step === 0), simulated);
+  const iRheo = rheobase(p);
+  const maxRate = p.refractoryPeriod > 0 ? formatQuantity(1000 / p.refractoryPeriod, 0, 'Hz') : 'no limit';
+  fiReadouts.innerHTML = `
+    <div><dt>Rheobase <i>I</i><sub>rheo</sub>: the curve starts here</dt><dd>${formatQuantity(iRheo, 2, 'nA')}</dd></div>
+    <div><dt>Rate at <i>I</i> = ${formatQuantity(yourCurrent, 2, 'nA')} (formula)</dt><dd>${formatQuantity(exactFiringRate(p, yourCurrent), 1, 'Hz')}</dd></div>
+    <div><dt>Upper limit 1/<i>t</i><sub>ref</sub> for huge currents</dt><dd>${maxRate}</dd></div>
+    <div><dt>Largest difference simulation ↔ formula</dt><dd>${formatPercent(comparison.largestRelativeDifference)}</dd></div>`;
+
+  if (!Number.isFinite(comparison.largestRelativeDifference)) {
+    fiStatus.textContent = 'Simulation and formula disagree: a neuron fired although the formula says it never does.';
+    return;
+  }
+  const tooSlow =
+    comparison.tooSlowPoints > 0
+      ? ` ${comparison.tooSlowPoints} ${comparison.tooSlowPoints === 1 ? 'current' : 'currents'} just above the rheobase fire too slowly to measure within ${FI_DURATION / 1000} s.`
+      : '';
+  fiStatus.textContent = `Simulation (dots) and formula (line) agree: over ${comparison.measuredPoints} measured currents, the largest difference is ${formatPercent(comparison.largestRelativeDifference)}.${tooSlow}`;
+}
+
+// ---------- Updating ----------
+
+function update(): void {
+  const p = parameters();
+  try {
+    updateTrace(p);
+    if (fiTabShown) updateFiCurve(p);
+  } catch (error) {
+    for (const element of [status, fiStatus]) {
+      element.textContent = `These settings can't be simulated: ${(error as Error).message}`;
+      element.classList.add('lab__status--error');
+    }
+    return;
+  }
+  for (const element of [status, fiStatus]) element.classList.remove('lab__status--error');
 }
 
 // A dragged slider sends many events; all events that arrive before the next turn of the event
