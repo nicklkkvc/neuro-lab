@@ -23,7 +23,7 @@ Agreed in the roadmap review on 2026-10-22. Every session follows them; the step
 
 # PART 1 — FOUNDATION
 
-## [ ] Step 1: Site skeleton
+## [x] Step 1: Site skeleton
 - Prerequisites: GitHub account (✓ nicklkkvc). Repo name: `neuro-lab`, so the site URL is `https://nicklkkvc.github.io/neuro-lab/` (see A1). The repo must be public (GitHub Pages on a free account needs that). In the repo's Settings → Pages, set Source to "GitHub Actions".
 - Set up Vite + TypeScript project.
 - Add .gitattributes so text files always use LF line endings (Windows uses CRLF, the GitHub Actions runner is Linux).
@@ -46,6 +46,7 @@ Agreed in the roadmap review on 2026-10-22. Every session follows them; the step
 - For Step 10: worker files need the "WebWorker" type library, which clashes with "DOM" in one check, so `src/workers/` will need its own tsconfig.
 - Credits page: the library table is generated from `package.json`; data sources are added by hand.
 - Checked: 23 tests, build, all 6 pages at 375 px without sideways scrolling, keyboard order with skip link, all production paths and fonts under `/neuro-lab/`.
+- Live at https://nicklkkvc.github.io/neuro-lab/ (Pages source: GitHub Actions). Each push to `main` runs test → build → deploy in about 1 minute; a failing test stops the deploy. GitHub's auto-created README commit was merged in, not overwritten.
 
 ## [ ] Step 2: Numerical engine (ODE solvers)
 - src/models/solvers.ts: Euler and RK4 integrators for systems of ODEs (state as an array).
