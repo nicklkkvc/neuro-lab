@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A neuron: cell body, four dendrites and an axon that branches at the end. -->
+  <g fill="none" stroke="#0a6c8f" stroke-width="2.4" stroke-linecap="round">
+    <path d="M14 12 L11 3 M12 16 L3 13 M13 20 L6 27 M19 11 L24 4"/>
+    <path d="M19 19 L26 26 M26 26 L30 24 M26 26 L28 30"/>
+  </g>
+  <circle cx="15.5" cy="15.5" r="5.5" fill="#0a6c8f"/>
+</svg>

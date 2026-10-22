@@ -1,0 +1,21 @@
+{
+  // Settings shared by all three type checks (see tsconfig.json, tsconfig.node.json, src/models/tsconfig.json).
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    // Design decision A9: only TypeScript that can simply be erased (no enum, no namespace, ...),
+    // type-only imports written as `import type`, and relative imports ending in ".ts".
+    // Then Node can run the same files directly (scripts in Steps 11 and 14).
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true
+  }
+}

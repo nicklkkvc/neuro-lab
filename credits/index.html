@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Credits &amp; licenses · Neuro Lab</title>
+    <meta name="description" content="Libraries, data sources and licenses used by Neuro Lab.">
+    <!--slot:head-->
+    <script type="module" src="/src/pages/credits.ts"></script>
+  </head>
+  <body>
+    <!--slot:header-->
+    <main id="main" tabindex="-1" class="page">
+      <article class="prose">
+        <h1>Credits &amp; licenses</h1>
+
+        <h2>This project</h2>
+        <p>The source code of Neuro Lab is published under the MIT license and is available <a href="https://github.com/nicklkkvc/neuro-lab">on GitHub</a>.</p>
+
+        <h2>Libraries</h2>
+        <p>The website uses these open-source libraries:</p>
+        <!--slot:libraries-->
+        <p>It is built with Vite and TypeScript and tested with Vitest.</p>
+
+        <h2>Data</h2>
+        <p>No external datasets are used yet. Each one will be listed here with its source and license when it is added: handwritten digits (MNIST) for the Network Lab and the <i>C.&nbsp;elegans</i> wiring diagram for the Brain Lab.</p>
+
+        <h2>Scientific sources</h2>
+        <p>The papers a model is based on are cited in the <a href="../theory/">Theory</a> notes, next to that model.</p>
+      </article>
+    </main>
+    <!--slot:footer-->
+  </body>
+</html>

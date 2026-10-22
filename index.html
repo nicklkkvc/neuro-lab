@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Neuro Lab</title>
+    <meta name="description" content="Interactive labs about neurons, neural networks and the wiring of a real worm brain, with the theory behind every model.">
+    <!--slot:head-->
+    <script type="module" src="/src/pages/home.ts"></script>
+  </head>
+  <body>
+    <!--slot:header-->
+    <main id="main" tabindex="-1" class="page">
+      <section class="hero">
+        <h1>Neuro Lab</h1>
+        <p class="lead">How do neurons compute? Simulate single neurons, train artificial neural networks and explore the wiring of a real nervous system: the 302 neurons of the worm <i>C.&nbsp;elegans</i>. Every model comes with the theory behind it.</p>
+      </section>
+
+      <ul class="cards">
+        <li class="card">
+          <h2><a href="neuron-lab/">Neuron Lab</a></h2>
+          <p>Simulate a single neuron, from the simple integrate-and-fire model to the ion channels of Hodgkin and Huxley, and connect two neurons with a synapse.</p>
+          <p class="status">In preparation</p>
+        </li>
+        <li class="card">
+          <h2><a href="network-lab/">Network Lab</a></h2>
+          <p>Train artificial neural networks, from a single perceptron to a network that reads your handwriting, and look inside to see what it learned.</p>
+          <p class="status">In preparation</p>
+        </li>
+        <li class="card">
+          <h2><a href="brain-lab/">Brain Lab</a></h2>
+          <p>Explore the complete wiring diagram of <i>C.&nbsp;elegans</i> and simulate how a touch could travel through its nervous system.</p>
+          <p class="status">In preparation</p>
+        </li>
+        <li class="card">
+          <h2><a href="theory/">Theory</a></h2>
+          <p>The math and biology behind every lab: equations, what each parameter means, where a model comes from and where it stops being accurate.</p>
+          <p class="status status--ready">Grows with every lab</p>
+        </li>
+      </ul>
+
+      <section class="about">
+        <h2>About this project</h2>
+        <p>Neuro Lab is built step by step as a learning project. The models are simplified on purpose so they can run in the browser and be understood. Each lab says which assumptions it makes, so you can tell what comes from real data and what is a modeling choice.</p>
+      </section>
+    </main>
+    <!--slot:footer-->
+  </body>
+</html>

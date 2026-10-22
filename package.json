@@ -1,0 +1,29 @@
+{
+  "name": "neuro-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Educational interactive website about neurons, neural networks and real brain connectomes.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && tsc -p src/models/tsconfig.json"
+  },
+  "dependencies": {
+    "katex": "^0.19.0",
+    "markdown-it": "^15.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

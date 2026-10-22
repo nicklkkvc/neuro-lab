@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Neuron Lab · Neuro Lab</title>
+    <meta name="description" content="Simulate single neurons and synapses in the browser.">
+    <!--slot:head-->
+    <script type="module" src="/src/pages/neuron-lab.ts"></script>
+  </head>
+  <body>
+    <!--slot:header-->
+    <main id="main" tabindex="-1" class="page">
+      <h1>Neuron Lab</h1>
+      <p class="lead">Simulate single neurons and watch their membrane voltage change while you move the sliders.</p>
+      <div class="notice">
+        <p><strong>In preparation.</strong> The first model, the leaky integrate-and-fire neuron, is coming next.</p>
+      </div>
+      <h2>Planned</h2>
+      <ul>
+        <li>Leaky integrate-and-fire neuron, and how its firing rate depends on the input current</li>
+        <li>Izhikevich model: very different firing patterns from just four parameters</li>
+        <li>Hodgkin–Huxley model with sodium and potassium channels, and what happens when you block them</li>
+        <li>Synapses: two connected neurons and a pair that takes turns firing</li>
+      </ul>
+    </main>
+    <!--slot:footer-->
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  // CLAUDE.md rule 4: model code must also run in tests, Web Workers and Node scripts.
+  // So it is checked here with plain JavaScript only: no browser types (document, window,
+  // localStorage, ...) and no Node types (process, fs, ...). Note: console is not available either.
+  // Tests (*.test.ts) are left out here; tsconfig.json checks them.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["**/*.test.ts"]
+}

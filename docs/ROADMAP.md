@@ -34,6 +34,19 @@ Agreed in the roadmap review on 2026-10-22. Every session follows them; the step
 - GitHub Actions workflow deploying to GitHub Pages. Add Vitest.
 - Done when: npm run dev works, navigation works on desktop and phone, the Theory page renders a test formula, site is live after pushing.
 
+**Notes (2026-10-22):**
+- Pages: one `index.html` per page (home, `neuron-lab/`, `network-lab/`, `brain-lab/`, `theory/`, `credits/`), listed in `src/ui/site.ts`. A new page needs an entry there, `<path>/index.html` and `src/pages/<name>.ts`.
+- Shared parts come from `<!--slot:…-->` placeholders that a small plugin in `vite.config.ts` fills at build time (head tags, header, footer, theory, library table). Pages work without JavaScript.
+- Theory: `docs/NOTES.md` is rendered at build time by `src/ui/theory-render.ts` (markdown-it + own `$…$`/`$$…$$` rules + KaTeX), so the browser loads KaTeX's CSS but no KaTeX JavaScript. `##`/`###` headings get stable ids: labs link to `theory/#<id>`. A test fails if any formula in NOTES.md is broken. In dev, editing NOTES.md reloads the page.
+- Not used: `@vscode/markdown-it-katex`, because it pins KaTeX 0.16 while we use 0.19 (two KaTeX versions, CSS not matching the renderer).
+- Dependencies: katex, markdown-it; dev: vite 8, vitest 5, typescript 7, @types/node (types for `vite.config.ts` and later `scripts/`). markdown-it and KaTeX bring their own types.
+- `npm run typecheck` runs three checks: browser code + tests, Node code, and `src/models/` without browser or Node types (so no `console` there either). `src/models/_rule4-guard.ts` makes that check fail if such types ever leak in; this was tested.
+- A9 checked: Node 24 runs `.ts` files directly, including `import type` and `.ts` imports. All relative imports end in `.ts`.
+- For Step 3: colors are CSS variables (`--color-*` in `src/ui/styles.css`); `onThemeChange()` in `src/ui/theme.ts` tells plots to redraw. Measured contrast ≥ 5:1 in both themes.
+- For Step 10: worker files need the "WebWorker" type library, which clashes with "DOM" in one check, so `src/workers/` will need its own tsconfig.
+- Credits page: the library table is generated from `package.json`; data sources are added by hand.
+- Checked: 23 tests, build, all 6 pages at 375 px without sideways scrolling, keyboard order with skip link, all production paths and fonts under `/neuro-lab/`.
+
 ## [ ] Step 2: Numerical engine (ODE solvers)
 - src/models/solvers.ts: Euler and RK4 integrators for systems of ODEs (state as an array).
 - Must be efficient for large state arrays (later used for 300+ neurons at once).

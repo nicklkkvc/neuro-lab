@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.log
+*.local
+.DS_Store
+Thumbs.db
+
+# Local preview settings for Claude Code (contain paths of this computer)
+.claude/launch.json

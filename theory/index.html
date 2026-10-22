@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Theory · Neuro Lab</title>
+    <meta name="description" content="The math and biology behind the Neuro Lab models, explained step by step.">
+    <!--slot:head-->
+    <script type="module" src="/src/pages/theory.ts"></script>
+  </head>
+  <body>
+    <!--slot:header-->
+    <main id="main" tabindex="-1" class="page">
+      <h1>Theory</h1>
+      <p class="lead">The math and biology behind every lab. For each model: its equations, what every parameter means, where the model comes from and where it stops being accurate.</p>
+      <nav class="toc" aria-labelledby="toc-title">
+        <h2 id="toc-title" class="toc__title">Contents</h2>
+        <!--slot:theory-toc-->
+      </nav>
+      <article class="prose">
+        <!--slot:theory-content-->
+      </article>
+    </main>
+    <!--slot:footer-->
+  </body>
+</html>
