@@ -48,12 +48,20 @@ Agreed in the roadmap review on 2026-10-22. Every session follows them; the step
 - Checked: 23 tests, build, all 6 pages at 375 px without sideways scrolling, keyboard order with skip link, all production paths and fonts under `/neuro-lab/`.
 - Live at https://nicklkkvc.github.io/neuro-lab/ (Pages source: GitHub Actions). Each push to `main` runs test → build → deploy in about 1 minute; a failing test stops the deploy. GitHub's auto-created README commit was merged in, not overwritten.
 
-## [ ] Step 2: Numerical engine (ODE solvers)
+## [x] Step 2: Numerical engine (ODE solvers)
 - src/models/solvers.ts: Euler and RK4 integrators for systems of ODEs (state as an array).
 - Must be efficient for large state arrays (later used for 300+ neurons at once).
 - NOTES.md: explain both methods and why RK4 is more accurate (local/global error order).
 - Tests on exponential decay dV/dt = −V/τ vs exact V₀·e^(−t/τ): halving dt halves Euler's error and reduces RK4's error by ~16×.
 - Done when: tests pass.
+
+**Notes (2026-10-22):**
+- API in `src/models/solvers.ts`: `createEulerStepper(n)`, `createRK4Stepper(n)`, `createStepper('euler' | 'rk4', n)` (for the solver switch in Step 6), and `integrate(stepper, f, y, { t0, dt, steps, afterStep })`. The derivative is `f(t, y, dydt)` and writes into `dydt`; the state is a `Float64Array` that is updated in place (A2, A3). Steppers create their buffers once.
+- For Step 3: jumps (threshold → reset, refractory clamp) go into `afterStep(t, y)`, which runs after every step; a test shows a reset working this way. `integrate` computes times as `t0 + k·dt`, so they don't drift.
+- Measured on the decay test: Euler error ratios 2.02 → 2.01 → 2.00, RK4 16.68 → 16.34 → 16.17 (dt = 1, 0.5, 0.25, 0.125 ms). The table is in NOTES.md.
+- 21 tests: hand calculations, order 1 and order 4 on a single equation and on a coupled system (oscillator), time-dependent right-hand sides (RK4 exact for 4t³), 1000 neurons at once, stability limits (Euler 2τ, RK4 ≈ 2.8τ). Mutation check: two typical RK4 bugs were each caught.
+- Speed (Node 24): 1200 variables (300 neurons × 4, like Hodgkin–Huxley) take 31.5 µs per RK4 step and 7 µs per Euler step; 100 ms of such a network at dt = 0.01 ms takes about 0.3 s.
+- Theory page: new section `#solving-differential-equations-numerically`. To keep formulas readable on phones, long chains of "=" or "⟹" are split into several lines with `aligned`; do the same in later notes. On phones KaTeX is drawn slightly smaller.
 
 # PART 2 — NEURON LAB
 

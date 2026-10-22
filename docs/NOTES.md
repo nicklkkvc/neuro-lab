@@ -23,15 +23,30 @@ These sizes suit neurons: membrane potentials are tens of millivolts, and a spik
 
 The units are chosen so that the usual formulas work without conversion factors. Ohm's law, $V = R \cdot I$, gives millivolts directly:
 
-$$1\ \text{M}\Omega \cdot 1\ \text{nA} = 10^{6}\ \Omega \cdot 10^{-9}\ \text{A} = 10^{-3}\ \text{V} = 1\ \text{mV}$$
+$$
+\begin{aligned}
+1\ \text{M}\Omega \cdot 1\ \text{nA} &= 10^{6}\ \Omega \cdot 10^{-9}\ \text{A} \\
+&= 10^{-3}\ \text{V} = 1\ \text{mV}
+\end{aligned}
+$$
 
 Conductance is the inverse of resistance, $g = 1/R$, so one microsiemens is one over a megaohm, and $I = g \cdot V$ gives nanoamperes:
 
-$$1\ \mu\text{S} \cdot 1\ \text{mV} = 10^{-6}\ \text{S} \cdot 10^{-3}\ \text{V} = 10^{-9}\ \text{A} = 1\ \text{nA}$$
+$$
+\begin{aligned}
+1\ \mu\text{S} \cdot 1\ \text{mV} &= 10^{-6}\ \text{S} \cdot 10^{-3}\ \text{V} \\
+&= 10^{-9}\ \text{A} = 1\ \text{nA}
+\end{aligned}
+$$
 
 The membrane time constant $\tau = R \cdot C$, which appears in the first neuron model, comes out in milliseconds:
 
-$$1\ \text{M}\Omega \cdot 1\ \text{nF} = 10^{6}\ \Omega \cdot 10^{-9}\ \text{F} = 10^{-3}\ \text{s} = 1\ \text{ms}$$
+$$
+\begin{aligned}
+1\ \text{M}\Omega \cdot 1\ \text{nF} &= 10^{6}\ \Omega \cdot 10^{-9}\ \text{F} \\
+&= 10^{-3}\ \text{s} = 1\ \text{ms}
+\end{aligned}
+$$
 
 Why is one ohm times one farad one second? An ohm is a volt per ampere, a farad is a coulomb per volt, and an ampere is a coulomb per second:
 
@@ -43,3 +58,139 @@ Two models use other units, and their pages say so:
 
 - **Hodgkin–Huxley** describes a small patch of membrane, so its values are per area: currents in µA/cm², conductances in mS/cm², capacitance in µF/cm².
 - **Izhikevich**: the voltage $v$ is in mV and time in ms, but the input $I$ has no stated physical unit. It only says how strong the input is.
+
+## Solving differential equations numerically
+
+### What a differential equation says
+
+A neuron model doesn't tell us the voltage directly. It tells us how fast the voltage *changes*: a **differential equation** gives the derivative $\frac{dV}{dt}$, the slope of the curve $V(t)$, for every moment and every value of $V$.
+
+The simplest example is part of every neuron model. Without input, the membrane voltage relaxes back to its resting value. If $V$ measures the distance from rest (in mV), then
+
+$$\frac{dV}{dt} = -\frac{V}{\tau}$$
+
+The minus sign means: if $V$ is positive it decreases, and the farther from rest, the faster. The **time constant** $\tau$ (in ms) sets the speed. This equation has an exact solution, which you can check by taking the derivative:
+
+$$V(t) = V_0 \, e^{-t/\tau}$$
+
+After one time constant ($t = \tau$), $e^{-1} \approx 0.37$, so 37 % of the starting value $V_0$ is left.
+
+For most neuron models, for example Hodgkin–Huxley, nobody can write down such a formula. Then the computer builds the curve step by step from the slopes. This is called **numerical integration**, and a program that does it is a **solver**.
+
+### Many variables at once
+
+Real models have several variables that change together: Hodgkin–Huxley has four per neuron ($V$, $m$, $h$, $n$), and a network of 300 neurons has hundreds. We collect them in a **state vector** $y = (y_1, y_2, \dots, y_n)$ and write the whole model as one equation:
+
+$$\frac{dy}{dt} = f(t, y)$$
+
+The function $f$ takes the current time and state and returns the slope of every variable. The methods below work the same way for one variable or a thousand: they treat all components alike, at the same time.
+
+### Euler's method: follow the tangent
+
+The idea (Leonhard Euler, 1768) comes straight from the definition of the derivative. For a small time step $\Delta t$, the derivative is close to the difference quotient:
+
+$$\frac{dy}{dt} \approx \frac{y(t + \Delta t) - y(t)}{\Delta t}$$
+
+Solved for the new value, and with $f$ giving the slope:
+
+$$y(t + \Delta t) \approx y(t) + \Delta t \cdot f(t, y(t))$$
+
+So from the current point, walk a distance $\Delta t$ along the tangent, measure the new slope there and repeat:
+
+$$y_{k+1} = y_k + \Delta t \cdot f(t_k, y_k)$$
+
+The weakness: the slope is only measured at the *start* of each step. If the curve bends during the step, Euler ends up next to the curve, and these small mistakes add up.
+
+For the decay equation, every Euler step multiplies $V$ by the same factor:
+
+$$
+\begin{aligned}
+V_{k+1} &= V_k - \Delta t \cdot \frac{V_k}{\tau} \\
+&= \left(1 - \frac{\Delta t}{\tau}\right) V_k
+\end{aligned}
+$$
+
+After $N$ steps the factor has been applied $N$ times:
+
+$$V_N = \left(1 - \frac{\Delta t}{\tau}\right)^{N} V_0$$
+
+The time is then $t = N \Delta t$, so this is $\left(1 - \frac{t/\tau}{N}\right)^{N} V_0$. As the steps get smaller ($N \to \infty$), it approaches $e^{-t/\tau}\,V_0$: exactly the limit that defines the exponential function.
+
+### Runge–Kutta 4: measure the slope four times
+
+The classic fourth-order Runge–Kutta method (Runge 1895, Kutta 1901), "RK4" for short, measures the slope four times per step and takes a weighted average:
+
+$$
+\begin{aligned}
+k_1 &= f(t_k,\ y_k) \\
+k_2 &= f\left(t_k + \tfrac{\Delta t}{2},\ y_k + \tfrac{\Delta t}{2}\, k_1\right) \\
+k_3 &= f\left(t_k + \tfrac{\Delta t}{2},\ y_k + \tfrac{\Delta t}{2}\, k_2\right) \\
+k_4 &= f\left(t_k + \Delta t,\ y_k + \Delta t\, k_3\right) \\
+y_{k+1} &= y_k + \frac{\Delta t}{6} \left(k_1 + 2k_2 + 2k_3 + k_4\right)
+\end{aligned}
+$$
+
+- $k_1$ is the slope at the start of the step (the only one Euler uses).
+- $k_2$ is the slope at the middle of the step, at the point reached by following $k_1$ for half a step.
+- $k_3$ is the slope at the middle again, now reached with the better slope $k_2$.
+- $k_4$ is the slope at the end of the step, reached with $k_3$.
+
+The weights 1, 2, 2, 1 (out of 6) are the same as in Simpson's rule for integrals: the middle of the step counts most. If the slope depends only on time, RK4 *is* Simpson's rule.
+
+Each step costs four evaluations of $f$ instead of one. But RK4 is so much more accurate that it can take far bigger steps for the same accuracy, which makes it cheaper overall.
+
+For the decay equation, with $x = \Delta t / \tau$, one RK4 step multiplies $V$ by
+
+$$1 - x + \frac{x^2}{2} - \frac{x^3}{6} + \frac{x^4}{24}$$
+
+These are exactly the first five terms of the series of the true factor:
+
+$$e^{-x} = 1 - x + \frac{x^2}{2} - \frac{x^3}{6} + \frac{x^4}{24} - \frac{x^5}{120} + \dots$$
+
+RK4 gets the true factor right up to the $x^4$ term, Euler's factor $1 - x$ only up to the $x$ term.
+
+### How big is the error?
+
+Two kinds of error matter:
+
+- The **local error** is the mistake made in a single step that starts exactly on the true curve. For the decay equation it is the difference between the step factor and $e^{-x}$. Euler misses the $\frac{x^2}{2}$ term, so its local error is about $\frac{x^2}{2}$, proportional to $\Delta t^2$. RK4 first misses the $\frac{x^5}{120}$ term, so its local error is proportional to $\Delta t^5$.
+- The **global error** is what you see in the end: the difference from the true solution at a fixed time $T$. Getting there takes $N = T / \Delta t$ steps, and roughly, the local errors add up:
+
+$$
+\begin{aligned}
+\text{global error} &\approx N \cdot C\,\Delta t^{\,p+1} \\
+&= \frac{T}{\Delta t} \cdot C\,\Delta t^{\,p+1} \\
+&= C\,T\,\Delta t^{\,p}
+\end{aligned}
+$$
+
+The exponent $p$ is the **order** of the method: Euler has order 1, RK4 has order 4. This predicts what happens when the step is halved:
+
+| Method | Order $p$ | Halving $\Delta t$ divides the global error by |
+|---|---|---|
+| Euler | 1 | $2^1 = 2$ |
+| RK4 | 4 | $2^4 = 16$ |
+
+So for Euler, 10 times more steps give 10 times more accuracy; for RK4, 10 times more steps give about 10,000 times more accuracy.
+
+The factor is only *about* 16, because $C\,\Delta t^{\,p}$ is just the biggest part of the error. Smaller parts (proportional to $\Delta t^{\,p+1}$ and beyond) shift the ratio a little, and the smaller $\Delta t$ is, the closer the ratio gets to 16.
+
+Measured with Neuro Lab's own solvers on the decay equation ($V_0 = 10$ mV, $\tau = 10$ ms), compared with the exact value $V(20\ \text{ms}) = 10 \cdot e^{-2} \approx 1.353$ mV:
+
+| $\Delta t$ (ms) | Euler error (mV) | ratio | RK4 error (mV) | ratio |
+|---|---|---|---|---|
+| 1 | 0.138 | – | $2.45 \cdot 10^{-6}$ | – |
+| 0.5 | 0.0682 | 2.02 | $1.47 \cdot 10^{-7}$ | 16.68 |
+| 0.25 | 0.0340 | 2.01 | $9.00 \cdot 10^{-9}$ | 16.34 |
+| 0.125 | 0.0170 | 2.00 | $5.56 \cdot 10^{-10}$ | 16.17 |
+
+Both ratios move toward 2 and 16 as the step shrinks, just as predicted. Even at the largest step, RK4 is more than 50,000 times as accurate as Euler. The tests in `src/models/solvers.test.ts` check these properties automatically.
+
+### Limits and pitfalls
+
+- **Too big steps make the solution explode.** For the decay equation, Euler's factor $1 - \frac{\Delta t}{\tau}$ becomes negative when $\Delta t > \tau$ (the solution jumps from one side of zero to the other), and its size exceeds 1 when $\Delta t > 2\tau$: then the numerical voltage grows without limit, although the real one decays. RK4 stays stable a bit longer, up to about $\Delta t \approx 2.8\,\tau$. The fastest process in a model sets the limit. In Hodgkin–Huxley some ion channel gates change within a fraction of a millisecond, which is why that simulation uses steps of 0.01 ms.
+- **Jumps break the error estimates.** The orders above assume a smooth curve. A spike reset, where the voltage jumps back instantly, is not smooth. So Neuro Lab never lets a solver step across such a jump: the solver only handles the smooth part, and jumps are applied between steps.
+- **Rounding errors.** A computer stores numbers with limited precision. With 64-bit numbers (about 16 significant digits), rounding only matters once the method's error is extremely small. With 32-bit numbers (about 7 digits) it would already hide RK4's error at normal step sizes. That is why all model math in Neuro Lab uses 64-bit numbers.
+- **Fixed steps.** Professional solvers adjust $\Delta t$ automatically: small steps where the curve bends sharply, big ones where it is nearly straight. Neuro Lab uses fixed steps, because they are easier to understand and keep animations and spike times simple.
+
+Further reading: E. Hairer, S. P. Nørsett, G. Wanner, *Solving Ordinary Differential Equations I*, Springer (1993).

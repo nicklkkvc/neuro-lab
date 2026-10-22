@@ -395,6 +395,14 @@ code {
   padding: 0.25rem 0;
 }
 
+/* KaTeX draws formulas 21 % larger than the text; on phones a bit smaller means less scrolling.
+   ".prose" makes this rule more specific than KaTeX's own, whose stylesheet loads after this one. */
+@media (max-width: 40rem) {
+  .prose .katex {
+    font-size: 1.05em;
+  }
+}
+
 .toc {
   max-width: var(--prose-width);
   margin: 1.5rem 0 1rem;
